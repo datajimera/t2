@@ -136,15 +136,7 @@ object WatchSessionRepository {
         if (currentState != SessionState.ACTIVE && currentState != SessionState.WAITING) {
             return
         }
-        val cleanReason = when {
-            reason.contains("bajaye", ignoreCase = true) || reason.contains("Doosra video", ignoreCase = true) ->
-                "Target video playback stopped because a different video was opened."
-            reason.contains("scroll", ignoreCase = true) || reason.contains("feed", ignoreCase = true) || reason.contains("search", ignoreCase = true) ->
-                "Target video was closed before the watch timer finished."
-            reason.contains("Aapne", ignoreCase = true) || reason.contains("Aap ", ignoreCase = true) || reason.contains("zaroori", ignoreCase = true) ->
-                "Watch session ended before the timer completed."
-            else -> reason
-        }
+        val cleanReason = if (reason.isNotBlank()) reason else "Target video playback stopped before completion."
         addLog(cleanReason, LogType.ERROR)
 
         _watchedMillis.value = 0L

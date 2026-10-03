@@ -207,12 +207,10 @@ object ApkUpdateInstaller {
                 }
             }
 
-            // If this is a fresh installation (installed recently, within 6 hours, or firstInstallTime == lastUpdateTime)
-            // and this is the first run without prior saved signature, the user just installed this newly downloaded APK!
-            val now = System.currentTimeMillis()
-            val isFreshInstall = (now - firstInstallTime) < (6 * 3600_000L) ||
-                    Math.abs(firstInstallTime - currentLastUpdateTime) <= 30_000L
-            if (installedSignature.isBlank() && isFreshInstall) {
+            // If this is a fresh installation (no prior saved signature recorded),
+            // the user just downloaded and installed this APK, so they are already up to date!
+            // Next prompt will only happen when a new update signature appears in the future.
+            if (installedSignature.isBlank()) {
                 return true
             }
 

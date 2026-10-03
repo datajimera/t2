@@ -13,6 +13,7 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
+    applicationId = "com.example.kingo.yiufgp"
     minSdk = 26
     targetSdk = 36
     val autoVersionCode = ((System.currentTimeMillis() / 60000L) - 29000000L).toInt().coerceAtLeast(10)
@@ -20,32 +21,10 @@ android {
     versionName = "2.0.$autoVersionCode"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-  }
-
-  flavorDimensions += "role"
-  productFlavors {
-    create("admin") {
-      dimension = "role"
-      applicationId = "com.example.kingo.yiufgp"
-      resValue("string", "app_name", "Kingo Admin")
-      buildConfigField("String", "APP_ROLE", "\"ADMIN\"")
-    }
-    create("user") {
-      dimension = "role"
-      applicationId = "com.example.kingo.yiufgp"
-      resValue("string", "app_name", "Kingo King")
-      buildConfigField("String", "APP_ROLE", "\"USER\"")
-    }
+    buildConfigField("String", "APP_ROLE", "\"USER\"")
   }
 
   signingConfigs {
-    create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
-    }
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")
       storePassword = "android"
@@ -55,13 +34,12 @@ android {
   }
 
   buildTypes {
+    debug { signingConfig = signingConfigs.getByName("debugConfig") }
     release {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
     }
-    debug { signingConfig = signingConfigs.getByName("debugConfig") }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
@@ -76,17 +54,6 @@ android {
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
-  }
-}
-
-// Ensure any leftover src/admin/java or src/user/java directories are removed so all Kotlin code compiles cleanly from src/main, while keeping flavor-specific res/ icons intact
-listOf(
-  "src/admin/java",
-  "src/user/java"
-).forEach { relativePath ->
-  val target = file(relativePath)
-  if (target.exists()) {
-    target.deleteRecursively()
   }
 }
 
