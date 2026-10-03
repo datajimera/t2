@@ -820,8 +820,7 @@ class YouTubeLiveSearchService : AccessibilityService() {
                     // Harmless comment click on target video (reading comments, opening comments box, typing, etc.)
                     lastCommentClickTime = System.currentTimeMillis()
                     lastCommentComposerOpenTime = System.currentTimeMillis()
-                    wasCommentComposerOpen = true
-                } else if (isSessionActive && !isCommentRelated && (looksLikeVideoCard || isNextOrPrevOrCollapse)) {
+                } else if (isSessionActive && !isCommentRelated) {
                     checkIfUserClickedDifferentVideo(node, desc, text, viewId, "$evText $evDesc".trim())
                 }
 
@@ -2890,13 +2889,7 @@ class YouTubeLiveSearchService : AccessibilityService() {
                 viewId.contains("comment_send", ignoreCase = true) ||
                 viewId.contains("bottom_sheet", ignoreCase = true) ||
                 viewId.contains("engagement_panel", ignoreCase = true) ||
-                isSoftKeyboardVisible() ||
-                wasCommentComposerOpen ||
-                wasCommentEditTextActive ||
-                hasTypedCommentText ||
-                (now - lastCommentComposerOpenTime) < 60_000L ||
-                (now - lastCommentClickTime) < 60_000L ||
-                (now - lastTypedCommentTime) < 60_000L
+                isSoftKeyboardVisible()
 
         if (isCommentOrSendAction) {
             lastCommentClickTime = now
@@ -3106,15 +3099,17 @@ class YouTubeLiveSearchService : AccessibilityService() {
             return
         }
 
-        val isConfirmedVideoCard = (looksLikeCard ||
+        val isConfirmedVideoCard = !isHarmlessAction && (
+                looksLikeCard ||
                 cardViewId.contains("video_lockup") ||
                 cardViewId.contains("compact_video") ||
                 cardViewId.contains("rich_item") ||
                 cardViewId.contains("video_card") ||
                 cardText.contains("Go to channel", ignoreCase = true) ||
                 cardText.contains("चैनल पर जाएं", ignoreCase = true) ||
-                (cardViewId.contains("video") && cardText.contains("views", ignoreCase = true))) &&
-                !isHarmlessAction
+                (cardViewId.contains("video") && cardText.contains("views", ignoreCase = true)) ||
+                (cardRect.top >= playerBottomY && cardText.length >= 4)
+        )
 
         if (!isConfirmedVideoCard) {
             // Not a video recommendation card. Never fail task on non-video clicks (e.g. comments, description, controls).
@@ -3123,8 +3118,10 @@ class YouTubeLiveSearchService : AccessibilityService() {
 
         val cleanClickedTitle = TitleMatcher.extractCardVideoTitleOnly(cardText, null, null).ifBlank {
             extractCleanTitleCandidate(cardText)
+        }.ifBlank {
+            extractCleanTitleCandidate(selfText)
         }
-        if (cleanClickedTitle.length >= 4 &&
+        if (cleanClickedTitle.length >= 3 &&
             !CHROME_LABELS.contains(cleanClickedTitle.lowercase()) &&
             !cleanClickedTitle.contains("like this video", ignoreCase = true) &&
             !cleanClickedTitle.contains("add a comment", ignoreCase = true) &&
@@ -3146,6 +3143,11 @@ class YouTubeLiveSearchService : AccessibilityService() {
                 return
             }
         }
+
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        handler.postDelayed({ verifyActiveYouTubeVideo(getYouTubeRootNode()) }, 200L)
+        handler.postDelayed({ verifyActiveYouTubeVideo(getYouTubeRootNode()) }, 500L)
+        handler.postDelayed({ verifyActiveYouTubeVideo(getYouTubeRootNode()) }, 900L)
     }
 
     private fun collectSubtreeText(node: AccessibilityNodeInfo?, sb: StringBuilder, depth: Int) {
@@ -3324,11 +3326,7 @@ class YouTubeLiveSearchService : AccessibilityService() {
     private fun isCommentsSheetOrKeyboardOpen(entries: List<UiNodeEntry>): Boolean {
         if (isSoftKeyboardVisible()) return true
         val now = System.currentTimeMillis()
-        if (wasCommentComposerOpen || wasCommentEditTextActive || hasTypedCommentText ||
-            (now - lastCommentComposerOpenTime) < 60_000L ||
-            (now - lastTypedCommentTime) < 60_000L ||
-            (now - lastCommentClickTime) < 60_000L
-        ) {
+        if ((now - lastCommentComposerOpenTime) < 4_000L || (now - lastCommentClickTime) < 3_000L) {
             return true
         }
         return entries.any { e ->
