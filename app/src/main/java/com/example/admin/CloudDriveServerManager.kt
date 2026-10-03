@@ -905,13 +905,17 @@ object CloudDriveServerManager {
                     .build()
                 val headRes = httpClient.newCall(headReq).execute()
                 val lastMod = headRes.header("Last-Modified")
+                val dateHdr = headRes.header("Date")
                 headRes.close()
-                if (!lastMod.isNullOrBlank()) {
+                val parsed = if (!lastMod.isNullOrBlank()) {
                     java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", java.util.Locale.US).parse(lastMod)?.time
+                } else if (!dateHdr.isNullOrBlank()) {
+                    java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", java.util.Locale.US).parse(dateHdr)?.time
                 } else null
+                parsed ?: Math.abs(clean.hashCode().toLong()).coerceAtLeast(1L)
             } catch (_: Exception) {
-                null
-            } ?: Math.abs(fileId.hashCode().toLong()).coerceAtLeast(1L)
+                Math.abs(clean.hashCode().toLong()).coerceAtLeast(1L)
+            }
             return AppUpdateInfo(
                 hasUpdate = true,
                 fileId = fileId,
