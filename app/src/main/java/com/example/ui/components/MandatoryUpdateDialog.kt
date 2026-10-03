@@ -108,7 +108,7 @@ fun MandatoryUpdateDialog(
 
     // If this app instance was already updated after the Drive APK was uploaded, mark installed immediately
     LaunchedEffect(updateInfo.signature) {
-        if (ApkUpdateInstaller.didAppUpdateComplete(context, updateInfo)) {
+        if (ApkUpdateInstaller.isAppAlreadyUpToDate(context, updateInfo)) {
             onMarkUpdateInstalled(updateInfo.signature)
         }
     }
@@ -117,7 +117,7 @@ fun MandatoryUpdateDialog(
     DisposableEffect(lifecycleOwner, waitingForInstallPermission, downloadedApkFile, installAttemptedInSession) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                if (ApkUpdateInstaller.didAppUpdateComplete(context, updateInfo)) {
+                if (ApkUpdateInstaller.isAppAlreadyUpToDate(context, updateInfo)) {
                     onMarkUpdateInstalled(updateInfo.signature)
                     return@LifecycleEventObserver
                 }
@@ -167,11 +167,10 @@ fun MandatoryUpdateDialog(
         val report = ApkUpdateInstaller.inspectApkCompatibility(context, apkFile)
         compatibilityReport = report
 
-        // If the downloaded APK is the exact same version & signature already installed and up-to-date, mark installed
+        // If the downloaded APK is the exact same version or older than already installed, mark installed immediately
         if (!report.hasSignatureConflict &&
             report.installedVersionCode > 0L &&
-            report.archiveVersionCode == report.installedVersionCode &&
-            ApkUpdateInstaller.wasInstallAttemptedForSignature(context, updateInfo.signature)
+            report.archiveVersionCode <= report.installedVersionCode
         ) {
             onMarkUpdateInstalled(updateInfo.signature)
             return

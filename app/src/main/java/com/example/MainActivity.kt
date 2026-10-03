@@ -189,11 +189,30 @@ fun WatchEarnApp(
     val installedUpdateSignature by viewModel.installedUpdateSignature.collectAsState()
 
     val pendingUpdate = remoteAppUpdate
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isAlreadyUpToDate = remember(pendingUpdate, installedUpdateSignature) {
+        if (pendingUpdate == null || !pendingUpdate.hasUpdate) {
+            true
+        } else {
+            com.example.util.ApkUpdateInstaller.isAppAlreadyUpToDate(
+                context = context,
+                updateInfo = pendingUpdate,
+                installedSignature = installedUpdateSignature
+            )
+        }
+    }
+
+    LaunchedEffect(pendingUpdate?.signature, isAlreadyUpToDate) {
+        if (pendingUpdate != null && pendingUpdate.hasUpdate && isAlreadyUpToDate && installedUpdateSignature != pendingUpdate.signature) {
+            viewModel.markAppUpdateInstalled(pendingUpdate.signature)
+        }
+    }
+
     if (BuildConfig.APP_ROLE != "ADMIN" &&
         pendingUpdate != null &&
         pendingUpdate.hasUpdate &&
-        (pendingUpdate.fileId.isNotBlank() || pendingUpdate.downloadUrl.isNotBlank()) &&
-        pendingUpdate.signature != installedUpdateSignature
+        !isAlreadyUpToDate &&
+        (pendingUpdate.fileId.isNotBlank() || pendingUpdate.downloadUrl.isNotBlank())
     ) {
         com.example.ui.components.MandatoryUpdateDialog(
             updateInfo = pendingUpdate,

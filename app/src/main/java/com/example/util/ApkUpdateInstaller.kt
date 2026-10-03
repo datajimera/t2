@@ -122,6 +122,7 @@ object ApkUpdateInstaller {
         return try {
             val pkgInfo = context.packageManager.getPackageInfo(context.packageName, 0)
             val currentLastUpdateTime = pkgInfo.lastUpdateTime
+            val firstInstallTime = pkgInfo.firstInstallTime
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val preInstallTime = prefs.getLong(KEY_PRE_INSTALL_UPDATE_TIME, 0L)
             val pendingSig = prefs.getString(KEY_PENDING_SIGNATURE, "") ?: ""
@@ -130,12 +131,91 @@ object ApkUpdateInstaller {
             if (pendingSig == updateInfo.signature && preInstallTime > 0L && currentLastUpdateTime > preInstallTime) {
                 return true
             }
-            // 2. If the app on device was installed/updated AFTER the APK was uploaded to Google Drive (+15s buffer)
-            if (updateInfo.updatedAtMillis > 1_700_000_000_000L &&
-                currentLastUpdateTime > (updateInfo.updatedAtMillis + 15_000L)
+            // 2. If the app on device was installed/updated at or after the APK was uploaded to Google Drive (+2m buffer)
+            if (updateInfo.updatedAtMillis > 1_000_000_000_000L &&
+                (currentLastUpdateTime >= (updateInfo.updatedAtMillis - 120_000L) ||
+                 firstInstallTime >= (updateInfo.updatedAtMillis - 120_000L))
             ) {
                 return true
             }
+            false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Determines whether the currently running app is already up-to-date with respect to the remote update.
+     * Prevents false "Mandatory Update" dialogs when user downloads the latest app via referral link.
+     */
+    fun isAppAlreadyUpToDate(
+        context: Context,
+        updateInfo: AppUpdateInfo,
+        installedSignature: String = ""
+    ): Boolean {
+        if (!updateInfo.hasUpdate) return true
+        if (installedSignature.isNotBlank() && installedSignature == updateInfo.signature) {
+            return true
+        }
+
+        if (didAppUpdateComplete(context, updateInfo)) {
+            return true
+        }
+
+        return try {
+            val pkgInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            val currentLastUpdateTime = pkgInfo.lastUpdateTime
+            val firstInstallTime = pkgInfo.firstInstallTime
+            val installedVerCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                pkgInfo.longVersionCode
+            } else {
+                pkgInfo.versionCode.toLong()
+            }
+
+            // Check if device already has a downloaded/cached update APK and compare versionCode
+            val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
+            val updatesDir = File(baseDir, "updates")
+            val cachedApk = File(updatesDir, "KingoKing_Update.apk")
+            val publicDownloadsApk = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "KingoKing_Update.apk"
+            )
+            val localApk = if (cachedApk.exists() && cachedApk.length() > 10_000L) {
+                cachedApk
+            } else if (publicDownloadsApk.exists() && publicDownloadsApk.length() > 10_000L) {
+                publicDownloadsApk
+            } else {
+                null
+            }
+
+            if (localApk != null) {
+                val report = inspectApkCompatibility(context, localApk)
+                if (report.isValidApk && report.archiveVersionCode > 0L) {
+                    if (installedVerCode >= report.archiveVersionCode) {
+                        return true
+                    }
+                }
+            }
+
+            // If the remote update timestamp is valid and the app on device was installed or updated
+            // at or after the remote APK was uploaded (with 2 min clock difference buffer)
+            if (updateInfo.updatedAtMillis > 1_000_000_000_000L) {
+                if (currentLastUpdateTime >= (updateInfo.updatedAtMillis - 120_000L) ||
+                    firstInstallTime >= (updateInfo.updatedAtMillis - 120_000L)
+                ) {
+                    return true
+                }
+            }
+
+            // If this is a fresh installation (installed recently, within 6 hours, or firstInstallTime == lastUpdateTime)
+            // and this is the first run without prior saved signature, the user just installed this newly downloaded APK!
+            val now = System.currentTimeMillis()
+            val isFreshInstall = (now - firstInstallTime) < (6 * 3600_000L) ||
+                    Math.abs(firstInstallTime - currentLastUpdateTime) <= 30_000L
+            if (installedSignature.isBlank() && isFreshInstall) {
+                return true
+            }
+
             false
         } catch (_: Exception) {
             false

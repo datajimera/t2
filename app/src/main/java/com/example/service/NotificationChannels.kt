@@ -309,7 +309,7 @@ object NotificationChannels {
                     val installedSig = dataStoreManager.installedUpdateSignatureFlow.first()
                     if (appUpdate != null && appUpdate.hasUpdate &&
                         (appUpdate.fileId.isNotBlank() || appUpdate.downloadUrl.isNotBlank()) &&
-                        appUpdate.signature != installedSig
+                        !com.example.util.ApkUpdateInstaller.isAppAlreadyUpToDate(context, appUpdate, installedSig)
                     ) {
                         val updKey = "app_update_${appUpdate.signature}"
                         if (!notified.contains(updKey) && !inMemoryDispatchedKeys.contains(updKey)) {

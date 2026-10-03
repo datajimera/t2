@@ -895,13 +895,34 @@ object CloudDriveServerManager {
         val fileMatch = fileRegex.find(clean)
         if (fileMatch != null) {
             val fileId = fileMatch.groupValues[1]
+            val dlUrl = "https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t"
+            val fileTimestamp = try {
+                val headReq = Request.Builder()
+                    .url(dlUrl)
+                    .header("Range", "bytes=0-0")
+                    .header("User-Agent", USER_AGENT)
+                    .get()
+                    .build()
+                val headRes = httpClient.newCall(headReq).execute()
+                val lastMod = headRes.header("Last-Modified")
+                val dateHdr = headRes.header("Date")
+                headRes.close()
+                val parsed = if (!lastMod.isNullOrBlank()) {
+                    java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", java.util.Locale.US).parse(lastMod)?.time
+                } else if (!dateHdr.isNullOrBlank()) {
+                    java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", java.util.Locale.US).parse(dateHdr)?.time
+                } else null
+                parsed ?: Math.abs(clean.hashCode().toLong()).coerceAtLeast(1L)
+            } catch (_: Exception) {
+                Math.abs(clean.hashCode().toLong()).coerceAtLeast(1L)
+            }
             return AppUpdateInfo(
                 hasUpdate = true,
                 fileId = fileId,
                 fileName = "KingoKing_Update.apk",
-                updatedAtMillis = Math.abs(clean.hashCode().toLong()).coerceAtLeast(1L),
+                updatedAtMillis = fileTimestamp,
                 fileSize = 0L,
-                downloadUrl = "https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t"
+                downloadUrl = dlUrl
             )
         }
 
